@@ -4,6 +4,7 @@
 package cache
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -45,8 +46,46 @@ func (cache *MCache) Get(key string) interface{} {
 	return item.val
 }
 
+//存数据
 func (cache *MCache) Put(key string, val interface{}, expired int64) error {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
+	item := MemoryItem{
+		val:        val,
+		Lastaccess: time.Now(),
+		expired:    expired,
+	}
+	cache.items[key] = &t
+	return nil
+}
 
+//删除key
+func (cache *MCache) Delete(key string) error {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	if _, ok := cache[key]; !ok {
+		return errors.New("Key not exist.")
+	}
+	delete(cache.items, key)
+	_, valid := cache.items[key]
+	if valid {
+		return errors.New("Delete key error")
+	}
+	return nil
+}
+
+//判断key 是否存在
+func (cache *MCache) IsExist(key string) bool {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
+	_, ok := cache.items[key]
+	return ok
+}
+
+//清除缓存
+func (cache *MCache) ClearAll() error {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	cache.items = make(map[string]*MemoryItem)
+	return nil
 }
