@@ -27,8 +27,9 @@ type MCache struct {
 }
 
 //生成一个内存缓存对象
-func NewMCache() *MCache {
-	cache := &MCache{items: make(map[string]*MemoryItem)}
+func NewMCache(every int, dur time.Duration) *MCache {
+	cache := &MCache{dur: dur, Every: every, items: make(map[string]*MemoryItem)}
+	go cache.checkExpiration()
 	return cache
 }
 
@@ -55,7 +56,7 @@ func (cache *MCache) Put(key string, val interface{}, expired int64) error {
 		Lastaccess: time.Now(),
 		expired:    expired,
 	}
-	cache.items[key] = &t
+	cache.items[key] = &item
 	return nil
 }
 
@@ -63,7 +64,7 @@ func (cache *MCache) Put(key string, val interface{}, expired int64) error {
 func (cache *MCache) Delete(key string) error {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
-	if _, ok := cache[key]; !ok {
+	if _, ok := cache.items[key]; !ok {
 		return errors.New("Key not exist.")
 	}
 	delete(cache.items, key)
@@ -88,4 +89,36 @@ func (cache *MCache) ClearAll() error {
 	defer cache.lock.Unlock()
 	cache.items = make(map[string]*MemoryItem)
 	return nil
+}
+
+//检查健值过期协程
+func (cache *MCache) checkExpiration() {
+	if cache.Every < 1 {
+		return
+	}
+
+	for {
+		<-time.After(cache.dur)
+		if cache.items == nil {
+			return
+		}
+		for key, _ := range cache.items {
+			cache.item_expired(key)
+		}
+	}
+}
+
+func (cache *MCache) item_expired(key string) bool {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
+	item, ok := cache.items[key]
+	if !ok {
+		return true
+	}
+	sec := time.Now().Unix() - item.Lastaccess.Unix()
+	if sec >= item.expired {
+		delete(cache.items, key)
+		return true
+	}
+	return false
 }
